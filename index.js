@@ -1,6 +1,6 @@
 const express = require("express");
-const userRouter = require("../controllers/userController");
-const taskRouter = require("../controllers/todoController");
+const userRouter = require("./controllers/userController");
+const taskRouter = require("./controllers/todoController");
 const mongoose = require("mongoose");
 const cors = require("cors");
 require("dotenv").config();
