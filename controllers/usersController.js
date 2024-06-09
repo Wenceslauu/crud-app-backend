@@ -1,74 +1,185 @@
-const express = require('express');
+require("dotenv").config();
+const bcryptjs = require("bcryptjs");
+const jwt = require("jsonwebtoken");
+const express = require("express");
 const router = express.Router();
-const { randomUUID } = require('crypto')
-const User = require('.././models/Users')
+const auth = require("../middlewares/authentication");
+const { UserModel } = require("../models/user");
+const { RoleUserModel } = require("../models/user");
 
-var users = []
+const JWT_SECRET = process.env.JWT_SECRET;
 
-router.get("/", async (req, res) => {
-    let resposta = await User.find()
-    return res.json(resposta)
-})
+router.get("/list", auth, async (req, res) => {
+  try {
+    const users = await RoleUserModel.find({});
+    return res.status(200).json(users);
+  } catch (error) {
+    return res
+      .status(500)
+      .json({ message: "Erro buscando os usuários", error: error.message });
+  }
+});
 
-router.post("/", (req, res) => {
+router.get("/count", async (req, res) => {
+  try {
+    const users = await UserModel.countDocuments();
+    return res.status(200).json({ totalUsers: users });
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
+  }
+});
 
-    var { nome, email } = req.body;
+router.get("/count-roles", async (req, res) => {
+  try {
+    const users = await RoleUserModel.countDocuments();
+    return res.status(200).json({ totalUsers: users });
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
+  }
+});
 
-    var user = {
-        id: randomUUID(),
-        nome: nome, 
-        email: email
+router.get("/roles", auth, async (req, res) => {
+  try {
+    const roleCounts = await RoleUserModel.aggregate([
+      {
+        $group: {
+          _id: "$role",
+          count: { $sum: 1 },
+        },
+      },
+    ]);
+
+    const roleCountsObject = roleCounts.reduce((acc, role) => {
+      acc[role._id] = role.count;
+      return acc;
+    }, {});
+
+    return res.json({
+      roleCounts: roleCountsObject,
+    });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({
+      mensagem: "Erro buscando a contagem de funções",
+      error: error.message,
+    });
+  }
+});
+
+router.put("/edit", auth, async (req, res) => {
+  const { username, newUsername, email, role, password } = req.body;
+
+  try {
+    const user = await RoleUserModel.findOne({ username });
+
+    if (!user) {
+      return res.status(404).json({ message: "Usuário não encontrado" });
     }
 
-    users.push(user)
+    user.username = newUsername || user.username;
+    user.email = email || user.email;
+    user.role = role || user.role;
 
-    console.log("Usuario adicionado com sucesso!")
-    return res.json(
-        {
-            mensagem: "Usuario adicionado com sucesso!",
-            user: user
-        }
-    )
-})
+    if (password) {
+      user.password = await bcryptjs.hash(password, 10);
+    }
 
-router.put("/:id", (req, res) => {
-    var id = req.params.id
-    var { nome, email } = req.body;
+    const updatedUser = await user.save();
 
+    return res.status(200).json({
+      message: "Usuário atualizado com sucesso",
+      user: updatedUser,
+    });
+  } catch (error) {
+    console.error(error);
+    return res
+      .status(500)
+      .json({ message: "Erro atualizando o usuário", error: error.message });
+  }
+});
 
-    users.map( user => {
-        if(user.id == id) {
-            user.nome = nome,
-            user.email = email
-        }
-    } )
+router.post("/create", auth, async (req, res) => {
+  const { username, email, role, password } = req.body;
+  const passwordEncrypt = await bcryptjs.hash(password, 10);
+  const user = {
+    username,
+    email,
+    role,
+    password: passwordEncrypt,
+  };
 
-    console.log("Usuario editado com sucesso!")
+  try {
+    await RoleUserModel.create(user);
+    return res.status(201).json({
+      mensagem: "Usuário criado com sucesso",
+    });
+  } catch (error) {
+    return res.status(500).json({
+      error: error,
+    });
+  }
+});
 
-    return res.json(
-        {
-            mensagem: "Usuario adicionado com sucesso!",
-            users: users
-        }
-    )
-})
+router.delete("/delete/:username", auth, async (req, res) => {
+  const username = req.params.username;
 
-router.delete("/:id", (req, res) => {
-    var id = req.params.id
+  try {
+    const user = await RoleUserModel.findOneAndDelete({ username: username });
 
-    users = users.filter( user => {
-        return user.id != id
-    })
+    if (!user) {
+      return res.status(404).json({ message: "Usuário não encontrado!" });
+    }
 
-    console.log("Usuario deletado com sucesso!")
+    console.log("Usuário apagado com sucesso!");
+    return res.status(200).json({ message: "Usuário apagado com sucesso!" });
+  } catch (error) {
+    console.error(error);
+    return res
+      .status(500)
+      .json({ mensagem: "Erro apagando usuário", error: error.message });
+  }
+});
 
-    return res.json(
-        {
-            mensagem: "Usuario deletado com sucesso!",
-            users: users
-        }
-    )
-})
+router.post("/register", async (req, res) => {
+  const { username, email, password } = req.body;
+  const passwordEncrypt = await bcryptjs.hash(password, 10);
+  const user = {
+    username,
+    email,
+    password: passwordEncrypt,
+  };
 
+  try {
+    await UserModel.create(user);
+    return res.status(201).json({
+      mensagem: "Usuário criado com sucesso",
+    });
+  } catch (error) {
+    return res.status(500).json({
+      error,
+    });
+  }
+});
+
+router.post("/login", async (req, res) => {
+  const { username, password } = req.body;
+  const user = await UserModel.findOne({ username: username });
+  if (!user) {
+    return res.status(400).json({ mensagem: "Usuário não encontrado" });
+  }
+
+  if (await bcryptjs.compare(password, user.password)) {
+    const token = jwt.sign({ username: user.username }, JWT_SECRET, {
+      expiresIn: "2d",
+    });
+
+    return res.status(200).json({
+      mensagem: "Usuário logado com sucesso",
+      token,
+    });
+  } else {
+    return res.status(401).json({ mensage: "Usuário/senha inválidos" });
+  }
+});
 
 module.exports = router;
