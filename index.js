@@ -9,7 +9,7 @@ const PORT = process.env.PORT;
 const DB_NAME = process.env.DB_NAME;
 const DB_USER = process.env.DB_USER;
 const DB_PASSWORD = process.env.DB_PASSWORD;
-const DB_URL = `mongodb+srv://${DB_USER}:${DB_PASSWORD}@be-ac2.7r4gfyp.mongodb.net/${DB_NAME}?retryWrites=true&w=majority&appName=be-ac2`;
+const DB_URL = `mongodb+srv://${DB_USER}:${DB_PASSWORD}@backend-ac2.2p3fhjc.mongodb.net/${DB_NAME}?retryWrites=true&w=majority&appName=backend-ac2`;
 
 const app = express();
 app.use(express.json());
