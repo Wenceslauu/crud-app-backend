@@ -31,5 +31,5 @@ mongoose
   });
 
 app.get("/", (req, res) => {
-  res.send("I'm alive!");
+  res.send("Funcionando");
 });
